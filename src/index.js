@@ -1,75 +1,121 @@
-import './css/styles.css';
-import debounce from 'lodash.debounce';
+
+import SimpleLightbox from 'simplelightbox';
+import 'simplelightbox/dist/simple-lightbox.min.css';
 import Notiflix from 'notiflix';
 import 'notiflix/dist/notiflix-3.2.5.min.css';
-import { fetchCountries } from './js/fetchCountries';
+import { fetchImages } from './js/fetchImages';
 
-const DEBOUNCE_DELAY = 300;
+const form = document.querySelector('.search-form');
+const searchQuery = document.querySelector('.input');
+const loadMoreBtn = document.querySelector('.load-more');
+const gallery = document.querySelector('.gallery');
 
-const searchBox = document.querySelector('#search-box');
-const countryList = document.querySelector('.country-list');
-const countryInfo = document.querySelector('.country-info');
 
-searchBox.addEventListener('input', debounce(searchCountry, DEBOUNCE_DELAY));
+let perPage = 40;
+let page = 1;
+let name = searchQuery.value;
 
-function clearMarkup(value) {
-  value.innerHTML = '';
-}
+loadMoreBtn.style.display = 'none';
+form.addEventListener('submit', eventHandler);
 
-function searchCountry(evt) {
+async function eventHandler(evt) {
     evt.preventDefault();
+    
 
-    const countryName = searchBox.value.trim();
-
-    fetchCountries(countryName)
-        .then(data => {
-            countriesData(data);
-    })
-        .catch(error => {
-            if (countryName !== '') {
-        Notiflix.Notify.failure('Oops, there is no country with that name');
-    }
-})
-}
-
-function countriesData(data) {
-    if (data.length > 10) {
-
-        clearMarkup(countryList);
-        clearMarkup(countryInfo);
-
-        Notiflix.Notify.info('Too many matches found. Please enter a more specific name.');
-
-    } else if (data.length > 1 && data.length <= 10) {
-        clearMarkup(countryList);
-        clearMarkup(countryInfo);
+    loadMoreBtn.style.display = 'none';
+    gallery.innerHTML = '';
+    page = 1;
+    name = searchQuery.value;
+    
+     fetchImages(name, page, perPage)
+    .then(name => {
+        let totalPages = name.total/ perPage;
+        // console.log(name)
         
-        return (countryList.innerHTML = data
-            .map(
-                item => `<li class = 'country'>
-                        <img class= 'image' src = '${item.flags.svg}' />
-                        <p>${item.name}</p>
-                    </li>`)
-            .join(''));
-    } else {
-        clearMarkup(countryList);
-        clearMarkup(countryInfo);
+        if (name.hits.length > 0) {
+            Notiflix.Notify.success(`Hooray! We found ${name.total} images.`);
+            renderGallery(name);
+            new SimpleLightbox('.gallery a');
+            loadMoreBtn.style.display = 'block';
 
-        return (countryInfo.innerHTML = data
-      .map(
-        item => `<div class = 'country-main'>
-                    
-                        <img class= 'image-flag' src = '${item.flags.svg}' />
-    
-                        <div class = 'country-body'>
-                        
-                            <h3>${item.name}</h3>
-                            <p><b>Capital: </b> ${item.capital}</p>
-                            <p><b>Population: </b> ${item.population.toLocaleString()}</p>
-                            <p><b>Languages: </b> ${item.languages[0].name}</p>
-                        </div>
-    
-                    </div>`)
-      .join(''));
-    }
+            loadMoreBtn.addEventListener('click', () => {
+                gallery.innerHTML = '';
+                // loadMoreBtn.style.display = 'none';
+            })
+        }
+            if (page < totalPages) {
+                loadMoreBtn.style.display = 'block';
+            } else {
+                loadMoreBtn.style.display = 'none';
+                 Notiflix.Notify.failure(
+            "Sorry, there are no images matching your search query. Please try again."
+                 );
+                gallery.innerHTML = '';
+            }
+            
+        })
+            .catch(error => console.log('ERROR: ' + error));
 }
+
+function renderGallery(name) {
+  const markup = name.hits
+    .map(hit => {
+      return `<div class="photo-card">
+        <a class="gallery-item" href="${hit.largeImageURL}">
+          <img
+            class="gallery__image"
+            src="${hit.webformatURL}"
+            alt="${hit.tags}"
+            loading="lazy"
+        /></a>
+        <div class="info">
+          <div class="info__box">
+            <p class="info-item">
+            <b class="text-info">likes</b>
+            </p>
+            <p class="info-counter">${hit.likes.toLocaleString()}</p>
+          </div>
+          <div class="info__box">
+            <p class="info-item">
+            <b class="text-info">views</b>
+            </p>
+            <p class="info-counter">${hit.views.toLocaleString()}</p>
+          </div>
+          <div class="info__box">
+            <p class="info-item">
+            <b class="text-info">comments</b>
+            </p>
+            <p class="info-counter">${hit.comments.toLocaleString()}</p>
+          </div>
+          <div class="info__box">
+            <p class="info-item">
+            <b class="text-info">downloads</b>
+            </p>
+            <p class="info-counter">${hit.downloads.toLocaleString()}</p>
+          </div>
+        </div>
+      </div>`;
+    })
+    .join('');
+  gallery.insertAdjacentHTML('beforeend', markup);
+}
+
+loadMoreBtn.addEventListener(
+  'click',
+    () => {
+      
+    name = searchQuery.value;
+    page += 1;
+    fetchImages(name, page, perPage).then(name => {
+        let totalPages = name.total / perPage;
+      renderGallery(name);
+      new SimpleLightbox('.gallery a');
+      if (page >= totalPages) {
+        loadMoreBtn.style.display = 'none';
+        Notiflix.Notify.info(
+          "We're sorry, but you've reached the end of search results."
+        );
+      }
+    });
+  },
+);
